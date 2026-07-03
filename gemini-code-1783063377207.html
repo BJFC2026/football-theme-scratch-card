@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beighton Juniors Fundraiser</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #1b4d3e; color: white; text-align: center; margin: 0; padding: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; max-width: 900px; margin: 20px auto; }
+        .card-slot { width: 100%; max-width: 140px; height: 160px; border: 2px solid #ccc; background: white; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 10px; box-sizing: border-box; margin: 0 auto; color: #222; }
+        .club-name { font-weight: bold; font-size: 14px; }
+        .name-input { width: 95%; padding: 4px; font-size: 11px; text-align: center; box-sizing: border-box; }
+        .buy-btn { width: 95%; padding: 5px; font-size: 11px; border: 1px solid #4CAF50; background: #4CAF50; color: white; font-weight: bold; cursor: pointer; border-radius: 4px; }
+        .taken { background: #e8f5e9; border-color: #a5d6a7; }
+        .player-name { font-size: 12px; font-weight: bold; color: #333; text-align: center; }
+        .foil-cover { width: 100%; padding: 35px 0; background: linear-gradient(135deg, #bcbcbc 0%, #e1e1e1 50%, #9a9a9a 100%); color: #333; font-weight: bold; font-size: 12px; border-radius: 4px; text-align: center; }
+        .winner { background: #e8f5e9; border-color: #2e7d32; }
+        .loser { background: #ffebee; border-color: #c62828; }
+        .master-btn { padding: 12px 24px; font-size: 15px; font-weight: bold; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 20px auto; display: block; }
+        #revealBtn { background: #008CBA; }
+        #resetBtn { background: #f44336; }
+    </style>
+</head>
+<body>
+
+    <h2>🏆 Beighton Juniors FC Live Fundraiser 🏆</h2>
+    <p>Claim your team box! Spots sync in real-time across all devices.</p>
+
+    <div class="grid" id="gameGrid"></div>
+    <button id="revealBtn" class="master-btn">Lock Board & Choose Random Winner</button>
+    <button id="resetBtn" class="master-btn" style="display:none;">Reset New Game Grid</button>
+
+    <script>
+        // --- 1. YOUR FIREBASE CONFIGURATION GOES HERE ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database().ref("football_scratch_card");
+
+        const clubs = ["Arsenal", "Aston Villa", "Chelsea", "Liverpool", "Man City", "Man United", "Newcastle", "Tottenham", "West Ham", "Wolves"];
+
+        // --- 2. LISTEN TO DATABASE CHANGES ---
+        db.on("value", (snapshot) => {
+            const data = snapshot.val() || { status: "active", slots: {}, winning_club: "" };
+            renderBoard(data);
+        });
+
+        function renderBoard(data) {
+            const grid = document.getElementById("gameGrid");
+            const revealBtn = document.getElementById("revealBtn");
+            const resetBtn = document.getElementById("resetBtn");
+            grid.innerHTML = "";
+
+            if (data.status === "completed") {
+                revealBtn.style.display = "none";
+                resetBtn.style.display = "block";
+            } else {
+                revealBtn.style.display = "block";
+                resetBtn.style.display = "none";
+            }
+
+            clubs.forEach(club => {
+                const slotDiv = document.createElement("div");
+                slotDiv.className = "card-slot";
+                const slotData = data.slots ? data.slots[club] : null;
+
+                if (data.status === "completed") {
+                    // Game is over: Show Winner or Loser status
+                    const isWinner = club === data.winning_club;
+                    slotDiv.className += isWinner ? " winner" : " loser";
+                    
+                    const pName = slotData ? slotData.player_name : "No Buyer";
+                    slotDiv.innerHTML = '<span class="club-name">' + club + '</span>' +
+                                        '<span class="player-name">👤 ' + pName + '</span>' +
+                                        '<strong style="color:' + (isWinner?'#2e7d32':'#c62828') + '">' + (isWinner?'🎉 WINNER!':'❌') + '</strong>';
+                } else if (slotData) {
+                    // Active game: Slot is already claimed
+                    slotDiv.className += " taken";
+                    slotDiv.innerHTML = '<span class="club-name">' + club + '</span>' +
+                                        '<span class="player-name">👤 ' + slotData.player_name + '</span>' +
+                                        '<span style="color:#4CAF50; font-size:11px; font-weight:bold;">✓ Locked In</span>';
+                } else {
+                    // Active game: Slot is vacant and ready for input
+                    slotDiv.innerHTML = '<span class="club-name">' + club + '</span>';
+                    const input = document.createElement("input");
+                    input.className = "name-input";
+                    input.placeholder = "Your Name";
+                    
+                    const button = document.createElement("button");
+                    button.className = "buy-btn";
+                    button.innerText = "Claim Spot";
+                    button.onclick = () => {
+                        const name = input.value.trim();
+                        if(!name) return alert("Please type your name!");
+                        db.child("slots").child(club).set({ player_name: name });
+                    };
+                    slotDiv.appendChild(input);
+                    slotDiv.appendChild(button);
+                }
+                grid.appendChild(slotDiv);
+            });
+
+            // Master trigger settings
+            revealBtn.onclick = () => {
+                const randomWinner = clubs[Math.floor(Math.random() * clubs.length)];
+                db.update({ status: "completed", winning_club: randomWinner });
+            };
+
+            resetBtn.onclick = () => {
+                db.set({ status: "active", winning_club: "", slots: {} });
+            };
+        }
+    </script>
+</body>
+</html>
