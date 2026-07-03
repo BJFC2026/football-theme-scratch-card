@@ -7,18 +7,20 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #1b4d3e; color: white; text-align: center; margin: 0; padding: 20px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; max-width: 900px; margin: 20px auto; }
+        body { font-family: Arial, sans-serif; background-color: #1b4d3e; color: white; text-align: center; margin: 0; padding: 15px; -webkit-overflow-scrolling: touch; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; max-width: 900px; margin: 20px auto; }
         .card-slot { width: 100%; max-width: 140px; height: 160px; border: 2px solid #ccc; background: white; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 10px; box-sizing: border-box; margin: 0 auto; color: #222; }
         .club-name { font-weight: bold; font-size: 14px; }
-        .name-input { width: 95%; padding: 4px; font-size: 11px; text-align: center; box-sizing: border-box; }
-        .buy-btn { width: 95%; padding: 5px; font-size: 11px; border: 1px solid #4CAF50; background: #4CAF50; color: white; font-weight: bold; cursor: pointer; border-radius: 4px; }
+        .name-input { width: 95%; padding: 5px; font-size: 12px; text-align: center; box-sizing: border-box; border: 1px solid #bbb; border-radius: 4px; }
+        .buy-btn { width: 95%; padding: 6px; font-size: 11px; border: 1px solid #4CAF50; background: #4CAF50; color: white; font-weight: bold; cursor: pointer; border-radius: 4px; }
         .taken { background: #e8f5e9; border-color: #a5d6a7; }
-        .player-name { font-size: 12px; font-weight: bold; color: #333; text-align: center; }
-        .foil-cover { width: 100%; padding: 35px 0; background: linear-gradient(135deg, #bcbcbc 0%, #e1e1e1 50%, #9a9a9a 100%); color: #333; font-weight: bold; font-size: 12px; border-radius: 4px; text-align: center; }
+        .player-name { font-size: 12px; font-weight: bold; color: #333; text-align: center; max-width: 100%; word-break: break-word; }
         .winner { background: #e8f5e9; border-color: #2e7d32; }
         .loser { background: #ffebee; border-color: #c62828; }
-        .master-btn { padding: 12px 24px; font-size: 15px; font-weight: bold; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 20px auto; display: block; }
+        
+        /* Admin Controls Wrapper (Hidden initially) */
+        #adminPanel { display: none; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 8px; max-width: 400px; margin: 20px auto; border: 1px dashed #ff9800; }
+        .master-btn { padding: 12px 24px; font-size: 15px; font-weight: bold; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 10px auto; width: 90%; max-width: 300px; display: block; }
         #revealBtn { background: #008CBA; }
         #resetBtn { background: #f44336; }
     </style>
@@ -26,22 +28,26 @@
 <body>
 
     <h2>🏆 Beighton Juniors FC Live Fundraiser 🏆</h2>
-    <p>Claim your team box! Spots sync in real-time across all devices.</p>
+    <p style="font-size: 14px; margin: 5px 0 20px 0; color: #e0e0e0;">Claim your team box! Spots sync in real-time across devices.</p>
 
     <div class="grid" id="gameGrid"></div>
-    <button id="revealBtn" class="master-btn">Lock Board & Choose Random Winner</button>
-    <button id="resetBtn" class="master-btn" style="display:none;">Reset New Game Grid</button>
+    
+    <div id="adminPanel">
+        <h3 style="margin-top:0; color:#ff9800;">🛠️ Admin Control Dashboard</h3>
+        <button id="revealBtn" class="master-btn">Lock Board & Choose Random Winner</button>
+        <button id="resetBtn" class="master-btn" style="display:none;">Reset New Game Grid</button>
+    </div>
 
     <script>
         // --- 1. YOUR FIREBASE CONFIGURATION GOES HERE ---
         const firebaseConfig = {
-            apiKey: "AIzaSyCmZ9l8J09urxFfdzZX_qmykUxV9CEzeJQ",
-  authDomain: "football-theme-scratch-card.firebaseapp.com",
-  projectId: "football-theme-scratch-card",
-  storageBucket: "football-theme-scratch-card.firebasestorage.app",
-  messagingSenderId: "190830189879",
-  appId: "1:190830189879:web:3cbabd2d481f86d9d5ceb2",
-  measurementId: "G-5Y25RKP7KF"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_ID",
+            appId: "YOUR_APP_ID"
         };
         
         firebase.initializeApp(firebaseConfig);
@@ -49,7 +55,13 @@
 
         const clubs = ["Arsenal", "Aston Villa", "Chelsea", "Liverpool", "Man City", "Man United", "Newcastle", "Tottenham", "West Ham", "Wolves"];
 
-        // --- 2. LISTEN TO DATABASE CHANGES ---
+        // --- 2. CHECK FOR ADMIN PASSKEY IN URL ---
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('admin') === 'beighton') {
+            document.getElementById('adminPanel').style.display = 'block';
+        }
+
+        // --- 3. LISTEN TO DATABASE CHANGES ---
         db.on("value", (snapshot) => {
             const data = snapshot.val() || { status: "active", slots: {}, winning_club: "" };
             renderBoard(data);
@@ -75,22 +87,18 @@
                 const slotData = data.slots ? data.slots[club] : null;
 
                 if (data.status === "completed") {
-                    // Game is over: Show Winner or Loser status
                     const isWinner = club === data.winning_club;
                     slotDiv.className += isWinner ? " winner" : " loser";
-                    
                     const pName = slotData ? slotData.player_name : "No Buyer";
                     slotDiv.innerHTML = '<span class="club-name">' + club + '</span>' +
                                         '<span class="player-name">👤 ' + pName + '</span>' +
                                         '<strong style="color:' + (isWinner?'#2e7d32':'#c62828') + '">' + (isWinner?'🎉 WINNER!':'❌') + '</strong>';
                 } else if (slotData) {
-                    // Active game: Slot is already claimed
                     slotDiv.className += " taken";
                     slotDiv.innerHTML = '<span class="club-name">' + club + '</span>' +
                                         '<span class="player-name">👤 ' + slotData.player_name + '</span>' +
                                         '<span style="color:#4CAF50; font-size:11px; font-weight:bold;">✓ Locked In</span>';
                 } else {
-                    // Active game: Slot is vacant and ready for input
                     slotDiv.innerHTML = '<span class="club-name">' + club + '</span>';
                     const input = document.createElement("input");
                     input.className = "name-input";
@@ -110,7 +118,6 @@
                 grid.appendChild(slotDiv);
             });
 
-            // Master trigger settings
             revealBtn.onclick = () => {
                 const randomWinner = clubs[Math.floor(Math.random() * clubs.length)];
                 db.update({ status: "completed", winning_club: randomWinner });
